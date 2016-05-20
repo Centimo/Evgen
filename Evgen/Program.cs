@@ -14,34 +14,50 @@ namespace Evgen
             //WriteLine(Environment.CurrentDirectory);
             //WriteLine(Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName);
             //WriteLine(Directory.GetParent(Directory.GetCurrentDirectory()).FullName);
+
             Parse();
         }
 
         static void Parse()
         {
+            Story[] Stories = new Story[40000];
+            int cStories = 0;
             string path = Path.GetFullPath(@".\..\..\..\text.txt");
-            string text;
+
             var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read);
-            using (var streamReader = new StreamReader(fileStream, Encoding.UTF8))
+            using (var sr = new StreamReader(fileStream, Encoding.UTF8))
             {
-                text = streamReader.ReadToEnd();
+                string line;
+                while ((line = sr.ReadLine()) != null)
+                {
+                    Stories[cStories].name = line;
+                    Stories[cStories].test = sr.ReadLine();
+                    Stories[cStories++].text = sr.ReadLine();
+                }
             }
 
-            text = text.Remove(10000);
+            //WriteLine(Stories[0].name);
+            //WriteLine(Stories[0].test);
+            //WriteLine(Stories[0].text);
 
-            string[] words = text.Split(
-                 new char[] { ' ', '\t', '\n', ',', '/', '\\', '?', '!', '<', '>', '\'', '|', ':', ';', ')', '(', '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'},
+            for (int i = 0; i < cStories; i++)
+            {
+                ILemmatizer lmtz = new LemmatizerPrebuiltCompact(LemmaSharp.LanguagePrebuilt.English);
+
+                string[] words = Stories[i].words;
+
+                words = Stories[i].text.Split(
+                    new char[] { ' ', '\t', '\n', ',', '/', '\\', '?', '!', '<', '>', '\'', '|', ':', ';', ')', '(', '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
                  StringSplitOptions.RemoveEmptyEntries);
 
-            ILemmatizer lmtz = new LemmatizerPrebuiltCompact(LemmaSharp.LanguagePrebuilt.English);
-            for (int i = 0; i < words.Length; i++)
-            foreach (string word in words)
-            {
-                //if (word.Length <= 1)
-                //    continue;
+                for (int j = 0; j < words.Length; j++)
+                {
+                    //if (word.Length <= 1)
+                    //    continue;
 
-                //if (Regex.IsMatch(word, @"^[a-zA-Z]+$"))
-                    LemmatizeOne(lmtz, ref words[i]);
+                    //if (Regex.IsMatch(word, @"^[a-zA-Z]+$"))
+                    LemmatizeOne(lmtz, ref words[j]);
+                }
             }
         }
 
@@ -53,6 +69,12 @@ namespace Evgen
             WriteLine("{0,20} ==> {1}", word, word);
         }
     }
-
+    struct Story
+    {
+        public string name;
+        public string test;
+        public string text;
+        public string[] words;// = new string[1000];
+    }
 }
 
