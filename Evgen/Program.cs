@@ -54,5 +54,6 @@ namespace Evgen
             WriteLine("{0,20} ==> {1}", word, lemma);
         }
     }
+
 }
 
