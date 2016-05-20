@@ -24,7 +24,7 @@ namespace Evgen
         {
             Parse();
             // тестовое ограничение - убрать в финале
-            cStories = 2;
+            cStories = 200;
 
             for (int i = 0; i < cStories; i++)
             {
@@ -33,17 +33,39 @@ namespace Evgen
                 DoFreq(Stories[i]);
             }
 
+
+            Story ss = new Story();
             for (int i = 0; i < cStories; i++)
             {
-                Array.Sort(Stories[i].freq, Stories[i].words);
-                WriteLine("story {0}", i);
-                for (int j = Stories[i].words.Length - 1; j > Stories[i].words.Length - 10; j--)
-                {
-                    Write("{0, 12}   ", Stories[i].words[j]);
-                    WriteLine(Stories[i].freq[j]);
-                }
-                WriteLine();
+                //if (Stories[i].name != "earn")
+                //    continue;
+
+                ss.text += Stories[i].text;
             }
+
+            Lemmatize(ref ss);
+            DoFreq(ss);
+
+            Array.Sort(ss.freq, ss.words);
+            for (int j = ss.words.Length - 1; j > ss.words.Length - 30; j--)
+            {
+                Write("{0, 12}   ", ss.words[j]);
+                WriteLine(ss.freq[j]);
+            }
+            WriteLine();
+
+
+            //for (int i = 0; i < 10000; i++)
+            //{
+            //    Array.Sort(Stories[i].freq, Stories[i].words);
+            //    WriteLine("story {0}", i);
+            //    for (int j = Stories[i].words.Length - 1; j > Stories[i].words.Length - 10; j--)
+            //    {
+            //        Write("{0, 12}   ", Stories[i].words[j]);
+            //        WriteLine(Stories[i].freq[j]);
+            //    }
+            //    WriteLine();
+            //}
 
             //int c = 0;
             //for (int i = 0; i < Stories[c].words.Length; i++)
@@ -63,6 +85,8 @@ namespace Evgen
                 string line;
                 while ((line = sr.ReadLine()) != null)
                 {
+                    if (line != "wheat")
+                        continue;
                     Stories[cStories].name = line;
                     Stories[cStories].test = sr.ReadLine();
                     Stories[cStories++].text = sr.ReadLine();
