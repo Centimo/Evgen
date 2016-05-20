@@ -33,25 +33,24 @@ namespace Evgen
                  new char[] { ' ', '\t', '\n', ',', '/', '\\', '?', '!', '<', '>', '\'', '|', ':', ';', ')', '(', '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'},
                  StringSplitOptions.RemoveEmptyEntries);
 
-            WriteLine(words);
-
             ILemmatizer lmtz = new LemmatizerPrebuiltCompact(LemmaSharp.LanguagePrebuilt.English);
+            for (int i = 0; i < words.Length; i++)
             foreach (string word in words)
             {
                 //if (word.Length <= 1)
                 //    continue;
 
                 //if (Regex.IsMatch(word, @"^[a-zA-Z]+$"))
-                    LemmatizeOne(lmtz, word);
+                    LemmatizeOne(lmtz, ref words[i]);
             }
         }
 
-        private static void LemmatizeOne(LemmaSharp.ILemmatizer lmtz, string word)
+        private static void LemmatizeOne(LemmaSharp.ILemmatizer lmtz, ref string word)
         {
             string wordLower = word.ToLower();
-            string lemma = lmtz.Lemmatize(wordLower);
-            ForegroundColor = wordLower == lemma ? ConsoleColor.White : ConsoleColor.Red;
-            WriteLine("{0,20} ==> {1}", word, lemma);
+            word = lmtz.Lemmatize(wordLower);
+            ForegroundColor = wordLower == word ? ConsoleColor.White : ConsoleColor.Red;
+            WriteLine("{0,20} ==> {1}", word, word);
         }
     }
 
