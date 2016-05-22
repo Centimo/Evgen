@@ -1,11 +1,9 @@
 ﻿using LemmaSharp;
 using System;
 using System.Linq;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.RegularExpressions;
-using static System.Console;
+using MathNet.Numerics.LinearAlgebra;
 
 namespace Evgen
 {
@@ -16,9 +14,12 @@ namespace Evgen
 		SortedDictionary<string, SortedDictionary<string, double> > _themes_freq = 
 			new SortedDictionary<string, SortedDictionary<string, double>>();
 
-		SortedDictionary<string, List<double>> _words_operators = new SortedDictionary<string, List<double>>();
+		SortedDictionary<string, Vector<double>> _words_operators = new SortedDictionary<string, Vector<double>>();
 
 		SortedDictionary<string, uint> _stopwords = new SortedDictionary<string, uint>();
+
+		SortedDictionary<string, List<int>> _themes =
+			new SortedDictionary<string, List<int>>();
 
 		static void Main(string[] args)
 		{
@@ -70,13 +71,14 @@ namespace Evgen
 				_themes_freq.Add(theme.Key, temp_freq);
 			}
 
-			
+			train(0.1);
+
+			test(_test_texts);
 		}
 
-		void train()
+		void train(double max_add_multiplyer)
 		{
-			double max_add_multiplyer = 0.1;
-			int themes_count = _themes_freq.Count;
+			int themes_count = _themes.Count;
 			SortedDictionary<string, uint> checked_words = new SortedDictionary<string, uint>();
 
 			SortedDictionary<string, Tuple<double, string>> most_freq_words = 
@@ -89,10 +91,12 @@ namespace Evgen
 				Tuple<double, string> val;
 				foreach (var word_freq in theme_freq.Value)
 				{
-					if (most_freq_words.TryGetValue(word_freq.Key, out val)
-						&& val.Item1 < word_freq.Value)
+					if (most_freq_words.TryGetValue(word_freq.Key, out val))
 					{
-						most_freq_words[word_freq.Key] = Tuple.Create(word_freq.Value, word_freq.Key);
+						if (val.Item1 < word_freq.Value)
+						{
+							most_freq_words[word_freq.Key] = Tuple.Create(word_freq.Value, word_freq.Key);
+						}
 					}
 					else
 					{
@@ -102,7 +106,7 @@ namespace Evgen
 			}
 
 			// генерируем операторы
-			var sorted_words_freqs = most_freq_words.Values.OrderBy(Tuple => Tuple.Item1);
+			var sorted_words_freqs = most_freq_words.Values.OrderBy(Tuple => -Tuple.Item1);
 			double max_freq = sorted_words_freqs.ElementAt(0).Item1;
 			foreach (var word_freq in sorted_words_freqs)
 			{
@@ -111,11 +115,13 @@ namespace Evgen
 					continue;
 				}
 				double val;
-				List<double> multiplyers = new List<double>();
+				Vector<double> multiplyers = Vector<double>.Build.Dense(themes_count, 1);
+				int i = 0;
 				foreach (var theme_freq in _themes_freq)
 				{
 					theme_freq.Value.TryGetValue(word_freq.Item2, out val);
-					multiplyers.Add(val / max_freq * max_add_multiplyer + 1);
+					multiplyers[i] += val / max_freq * max_add_multiplyer;
+					++i;
 				}
 				_words_operators.Add(word_freq.Item2, multiplyers);
 				checked_words.Add(word_freq.Item2, 0);
@@ -163,13 +169,23 @@ namespace Evgen
 					sr.ReadLine();
 				}
 			}
+
+			int i = 0;
+			foreach(var theme in _train_texts)
+			{
+				_themes.Add(theme.Key, new List<int>(3));
+				_themes[theme.Key].Add(i);
+				_themes[theme.Key].Add(0);
+				_themes[theme.Key].Add(0);
+				++i;
+			}
 		}
 
 		void lemmatize(Story story, ILemmatizer lmtz)
 		{
 			string[] words = story._text.Split(
-					new char[] { ' ', '.', '\t', '\n', ',', '/', '\\', '?', '!', '<', '>', '\'',
-							'|', ':', ';', ')', '(', '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
+					new char[] { ' ', '.', '\t', '\n', ',', '/', '\\', '?', '!', '<', '>', '\'', '"', '&', '[', ']',
+							'|', ':', ';', ')', '(', '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '*' },
 					StringSplitOptions.RemoveEmptyEntries);
 
 			uint val = 0;
@@ -178,7 +194,7 @@ namespace Evgen
 				words[i] = words[i].ToLower();
 				words[i] = lmtz.Lemmatize(words[i]);
 
-				if (!_stopwords.ContainsKey(words[i]))
+				if (!_stopwords.ContainsKey(words[i]) &&  words[i].Length > 2)
 				{
 					story._words.Add(words[i]);
 					
@@ -201,8 +217,49 @@ namespace Evgen
 			_stopwords.Add("are", 0);
 			_stopwords.Add("april", 0);
 			_stopwords.Add("march", 0);
-			_stopwords.Add("a", 0);
-			_stopwords.Add("i", 0);
+			_stopwords.Add("and", 0);
+			//_stopwords.Add("", 0);
+		}
+
+		void test(SortedDictionary<string, List<Story>> texts)
+		{
+			foreach(var theme in texts)
+			{
+				foreach (var story in theme.Value)
+				{
+					get_story_theme(story, theme.Key);
+				}
+			}
+		}
+
+		void operate(ref Vector<double> current, Vector<double> modifier)
+		{
+			for(int i = 0; i < current.Count && i < modifier.Count; ++i)
+			{
+				current[i] *= modifier[i];
+			}
+
+			// Нормализируем
+			current = current.Normalize(2);
+		}
+
+		void get_story_theme(Story story, string theme)
+		{
+			Vector<double> start = Vector<double>.Build.Dense(_themes_freq.Count, 1);
+			start = start.Normalize(2);
+			foreach (var word in story._words)
+			{
+				operate(ref start, _words_operators[word]);
+			}
+
+			if (_themes[theme][0] == start.MaximumIndex())
+			{
+				_themes[theme][1] += 1;
+			}
+			else
+			{
+				_themes[theme][2] += 1;
+			}
 		}
 
 		struct Story
