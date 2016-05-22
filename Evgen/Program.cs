@@ -16,7 +16,7 @@ namespace Evgen
 		SortedDictionary<string, SortedDictionary<string, double> > _themes_freq = 
 			new SortedDictionary<string, SortedDictionary<string, double>>();
 
-		SortedDictionary<string, double[] > _words_operators = new SortedDictionary<string, double[]>();
+		SortedDictionary<string, List<double>> _words_operators = new SortedDictionary<string, List<double>>();
 
 		SortedDictionary<string, uint> _stopwords = new SortedDictionary<string, uint>();
 
@@ -83,24 +83,43 @@ namespace Evgen
 				new SortedDictionary<string, Tuple<double, string>>();
 
 			// Получаю список всех слов с указанием их наибольшей плотности и соотв. темы
-			Tuple<double, string> val;
+			
 			foreach (var theme_freq in _themes_freq)
 			{
+				Tuple<double, string> val;
 				foreach (var word_freq in theme_freq.Value)
 				{
 					if (most_freq_words.TryGetValue(word_freq.Key, out val)
 						&& val.Item1 < word_freq.Value)
 					{
-						most_freq_words[word_freq.Key] = new Tuple<double, string>(word_freq.Value, theme_freq.Key);
+						most_freq_words[word_freq.Key] = Tuple.Create(word_freq.Value, word_freq.Key);
 					}
 					else
 					{
-						most_freq_words[word_freq.Key] = new Tuple<double, string>(word_freq.Value, theme_freq.Key);
+						most_freq_words[word_freq.Key] = Tuple.Create(word_freq.Value, word_freq.Key);
 					}
 				}
 			}
 
-			most_freq_words[word_freq.Key]
+			// генерируем операторы
+			var sorted_words_freqs = most_freq_words.Values.OrderBy(Tuple => Tuple.Item1);
+			double max_freq = sorted_words_freqs.ElementAt(0).Item1;
+			foreach (var word_freq in sorted_words_freqs)
+			{
+				if (checked_words.ContainsKey(word_freq.Item2))
+				{
+					continue;
+				}
+				double val;
+				List<double> multiplyers = new List<double>();
+				foreach (var theme_freq in _themes_freq)
+				{
+					theme_freq.Value.TryGetValue(word_freq.Item2, out val);
+					multiplyers.Add(val / max_freq * max_add_multiplyer + 1);
+				}
+				_words_operators.Add(word_freq.Item2, multiplyers);
+				checked_words.Add(word_freq.Item2, 0);
+			}
 		}
 		void parse()
 		{
