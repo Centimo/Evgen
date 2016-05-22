@@ -71,12 +71,20 @@ namespace Evgen
 				_themes_freq.Add(theme.Key, temp_freq);
 			}
 
-			train(0.1);
+			train(0.2, 2000, 3.0);
+
+			foreach (var theme in _test_texts)
+			{
+				foreach (Story story in theme.Value)
+				{
+					lemmatize(story, lmtz);
+				}
+			}
 
 			test(_test_texts);
 		}
 
-		void train(double max_add_multiplyer)
+		void train(double max_add_multiplyer, int max_words, double power)
 		{
 			int themes_count = _themes.Count;
 			SortedDictionary<string, uint> checked_words = new SortedDictionary<string, uint>();
@@ -108,8 +116,20 @@ namespace Evgen
 			// генерируем операторы
 			var sorted_words_freqs = most_freq_words.Values.OrderBy(Tuple => -Tuple.Item1);
 			double max_freq = sorted_words_freqs.ElementAt(0).Item1;
+
+			if(max_words == 0)
+			{
+				max_words = most_freq_words.Count;
+			}
+
+			int words_count = 0;
 			foreach (var word_freq in sorted_words_freqs)
 			{
+				if (words_count == max_words)
+				{
+					break;
+				}
+
 				if (checked_words.ContainsKey(word_freq.Item2))
 				{
 					continue;
@@ -120,11 +140,12 @@ namespace Evgen
 				foreach (var theme_freq in _themes_freq)
 				{
 					theme_freq.Value.TryGetValue(word_freq.Item2, out val);
-					multiplyers[i] += val / max_freq * max_add_multiplyer;
+					multiplyers[i] += Math.Pow(val / word_freq.Item1, power) * max_add_multiplyer;
 					++i;
 				}
 				_words_operators.Add(word_freq.Item2, multiplyers);
 				checked_words.Add(word_freq.Item2, 0);
+				++words_count;
 			}
 		}
 		void parse()
@@ -246,10 +267,14 @@ namespace Evgen
 		void get_story_theme(Story story, string theme)
 		{
 			Vector<double> start = Vector<double>.Build.Dense(_themes_freq.Count, 1);
+			Vector<double> val = Vector<double>.Build.Dense(_themes_freq.Count, 1);
 			start = start.Normalize(2);
 			foreach (var word in story._words)
 			{
-				operate(ref start, _words_operators[word]);
+				if(_words_operators.TryGetValue(word, out val))
+				{
+					operate(ref start, _words_operators[word]);
+				}
 			}
 
 			if (_themes[theme][0] == start.MaximumIndex())
