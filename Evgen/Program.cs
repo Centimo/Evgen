@@ -7,11 +7,27 @@ using MathNet.Numerics.LinearAlgebra;
 
 namespace Evgen
 {
+	public class SomeTupleComparer : IComparer<Tuple<double, int[]>>
+	{
+		public int Compare(Tuple<double, int[]> x, Tuple<double, int[]> y)
+		{
+			return x.Item1.CompareTo(y.Item1);
+		}
+	}
+
+	public class SomeReverseTupleComparer : IComparer<Tuple<double, int[]>>
+	{
+		public int Compare(Tuple<double, int[]> x, Tuple<double, int[]> y)
+		{
+			return -x.Item1.CompareTo(-y.Item1);
+		}
+	}
+
 	class Program
 	{
 		SortedDictionary<string, List<Story>> _test_texts = new SortedDictionary<string, List<Story>>();
 		SortedDictionary<string, List<Story>> _train_texts = new SortedDictionary<string, List<Story>>();
-		SortedDictionary<string, SortedDictionary<string, double> > _themes_freq = 
+		SortedDictionary<string, SortedDictionary<string, double>> _themes_freq =
 			new SortedDictionary<string, SortedDictionary<string, double>>();
 
 		SortedDictionary<string, Vector<double>> _words_operators = new SortedDictionary<string, Vector<double>>();
@@ -38,7 +54,7 @@ namespace Evgen
 
 			foreach (var theme in _train_texts)
 			{
-				foreach(Story story in theme.Value)
+				foreach (Story story in theme.Value)
 				{
 					lemmatize(story, lmtz);
 				}
@@ -49,7 +65,7 @@ namespace Evgen
 				{
 					words_count += story._words.Count;
 					double val = 0;
-					foreach(var word_freq in story._freq)
+					foreach (var word_freq in story._freq)
 					{
 						if (temp_freq.TryGetValue(word_freq.Key, out val))
 						{
@@ -71,8 +87,6 @@ namespace Evgen
 				_themes_freq.Add(theme.Key, temp_freq);
 			}
 
-			train(0.2, 2000, 3.0);
-
 			foreach (var theme in _test_texts)
 			{
 				foreach (Story story in theme.Value)
@@ -81,19 +95,92 @@ namespace Evgen
 				}
 			}
 
-			test(_test_texts);
+
+			string path = Path.GetFullPath(@".\..\..\..\otchet.txt");
+			var fileStream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write);
+			var sw = new StreamWriter(fileStream, System.Text.Encoding.UTF8);
+			List<Tuple<double, int[]>> exps = new List<Tuple<double, int[]>>();
+			for (int i = 0; i < 100; ++i)
+			{
+				for (int j = 0; j < 10; ++j)
+				{
+					for (int k = 0; k < 50; ++k)
+					{
+						train(0.02 + i * 0.02, 100 + j * 300, 0.1 + k * 0.2);
+						test(_test_texts);
+
+						sw.WriteLine((0.01 + i * 0.01).ToString() + " " + (100 + j * 100).ToString() + " " + (0.1 + k * 0.2).ToString());
+						double sum = 0;
+
+						foreach (var theme in _themes)
+						{
+							sum += Math.Pow((double)theme.Value[2] / (theme.Value[1] + theme.Value[2]), 2);
+							sw.WriteLine(theme.Key.ToString() + " " + theme.Value[1].ToString() + " " + theme.Value[2].ToString());
+						}
+
+						sw.WriteLine(Math.Sqrt(sum));
+						exps.Add(Tuple.Create(sum, new int[3] { i, j, k }));
+						sw.WriteLine();
+
+						_themes = new SortedDictionary<string, List<int>>();
+						_words_operators = new SortedDictionary<string, Vector<double>>();
+						// Console.WriteLine("done");
+					}
+				}
+			}
+
+			int l = 0;
+			SomeTupleComparer stc = new SomeTupleComparer();
+			exps.Sort(stc);
+			foreach (var exp in exps)
+			{
+				if(l > 50)
+				{
+					break;
+				}
+
+				sw.WriteLine(exp.Item2[0].ToString() + " " + exp.Item2[1].ToString() + " " + exp.Item2[2].ToString() + " " + exp.Item1.ToString());
+				++l;
+			}
+
+			l = 0;
+			SomeReverseTupleComparer srtc = new SomeReverseTupleComparer();
+			exps.Sort(srtc);
+			foreach (var exp in exps)
+			{
+				if (l > 50)
+				{
+					break;
+				}
+
+				sw.WriteLine(exp.Item2[0].ToString() + " " + exp.Item2[1].ToString() + " " + exp.Item2[2].ToString() + " " + exp.Item1.ToString());
+				++l;
+			}
+
+			sw.WriteLine();
+			sw.Close();
 		}
 
 		void train(double max_add_multiplyer, int max_words, double power)
 		{
-			int themes_count = _themes.Count;
+			int i = 0;
+			foreach (var theme in _train_texts)
+			{
+				_themes.Add(theme.Key, new List<int>(3));
+				_themes[theme.Key].Add(i);
+				_themes[theme.Key].Add(0);
+				_themes[theme.Key].Add(0);
+				++i;
+			}
+
+			int themes_count = _test_texts.Count;
 			SortedDictionary<string, uint> checked_words = new SortedDictionary<string, uint>();
 
-			SortedDictionary<string, Tuple<double, string>> most_freq_words = 
+			SortedDictionary<string, Tuple<double, string>> most_freq_words =
 				new SortedDictionary<string, Tuple<double, string>>();
 
 			// Получаю список всех слов с указанием их наибольшей плотности и соотв. темы
-			
+
 			foreach (var theme_freq in _themes_freq)
 			{
 				Tuple<double, string> val;
@@ -117,7 +204,7 @@ namespace Evgen
 			var sorted_words_freqs = most_freq_words.Values.OrderBy(Tuple => -Tuple.Item1);
 			double max_freq = sorted_words_freqs.ElementAt(0).Item1;
 
-			if(max_words == 0)
+			if (max_words == 0)
 			{
 				max_words = most_freq_words.Count;
 			}
@@ -136,12 +223,12 @@ namespace Evgen
 				}
 				double val;
 				Vector<double> multiplyers = Vector<double>.Build.Dense(themes_count, 1);
-				int i = 0;
+				int m = 0;
 				foreach (var theme_freq in _themes_freq)
 				{
 					theme_freq.Value.TryGetValue(word_freq.Item2, out val);
-					multiplyers[i] += Math.Pow(val / word_freq.Item1, power) * max_add_multiplyer;
-					++i;
+					multiplyers[m] += Math.Pow(val / word_freq.Item1, power) * max_add_multiplyer;
+					++m;
 				}
 				_words_operators.Add(word_freq.Item2, multiplyers);
 				checked_words.Add(word_freq.Item2, 0);
@@ -162,7 +249,7 @@ namespace Evgen
 					switch (sr.ReadLine())
 					{
 						case "t":
-							if(_train_texts.TryGetValue(line, out val))
+							if (_train_texts.TryGetValue(line, out val))
 							{
 								_train_texts[line].Add(new Story(sr.ReadLine()));
 							}
@@ -190,16 +277,6 @@ namespace Evgen
 					sr.ReadLine();
 				}
 			}
-
-			int i = 0;
-			foreach(var theme in _train_texts)
-			{
-				_themes.Add(theme.Key, new List<int>(3));
-				_themes[theme.Key].Add(i);
-				_themes[theme.Key].Add(0);
-				_themes[theme.Key].Add(0);
-				++i;
-			}
 		}
 
 		void lemmatize(Story story, ILemmatizer lmtz)
@@ -215,10 +292,10 @@ namespace Evgen
 				words[i] = words[i].ToLower();
 				words[i] = lmtz.Lemmatize(words[i]);
 
-				if (!_stopwords.ContainsKey(words[i]) &&  words[i].Length > 2)
+				if (!_stopwords.ContainsKey(words[i]) && words[i].Length > 2)
 				{
 					story._words.Add(words[i]);
-					
+
 					if (story._freq.TryGetValue(words[i], out val))
 					{
 						story._freq[words[i]] += 1;
@@ -244,7 +321,7 @@ namespace Evgen
 
 		void test(SortedDictionary<string, List<Story>> texts)
 		{
-			foreach(var theme in texts)
+			foreach (var theme in texts)
 			{
 				foreach (var story in theme.Value)
 				{
@@ -255,7 +332,7 @@ namespace Evgen
 
 		void operate(ref Vector<double> current, Vector<double> modifier)
 		{
-			for(int i = 0; i < current.Count && i < modifier.Count; ++i)
+			for (int i = 0; i < current.Count && i < modifier.Count; ++i)
 			{
 				current[i] *= modifier[i];
 			}
@@ -271,7 +348,7 @@ namespace Evgen
 			start = start.Normalize(2);
 			foreach (var word in story._words)
 			{
-				if(_words_operators.TryGetValue(word, out val))
+				if (_words_operators.TryGetValue(word, out val))
 				{
 					operate(ref start, _words_operators[word]);
 				}
