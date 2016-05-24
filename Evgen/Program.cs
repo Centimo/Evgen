@@ -19,7 +19,7 @@ namespace Evgen
 	{
 		public int Compare(Tuple<double, int[]> x, Tuple<double, int[]> y)
 		{
-			return -x.Item1.CompareTo(-y.Item1);
+			return y.Item1.CompareTo(x.Item1);
 		}
 	}
 
@@ -34,6 +34,7 @@ namespace Evgen
 
 		SortedDictionary<string, uint> _stopwords = new SortedDictionary<string, uint>();
 
+		List<string> _themes_names = new List<string>();
 		SortedDictionary<string, List<int>> _themes =
 			new SortedDictionary<string, List<int>>();
 
@@ -54,6 +55,7 @@ namespace Evgen
 
 			foreach (var theme in _train_texts)
 			{
+				_themes_names.Add(theme.Key);
 				foreach (Story story in theme.Value)
 				{
 					lemmatize(story, lmtz);
@@ -96,30 +98,35 @@ namespace Evgen
 			}
 
 
-			string path = Path.GetFullPath(@".\..\..\..\otchet.txt");
+			string path = Path.GetFullPath(@".\..\..\..\test_otchet11.txt");
 			var fileStream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write);
 			var sw = new StreamWriter(fileStream, System.Text.Encoding.UTF8);
 			List<Tuple<double, int[]>> exps = new List<Tuple<double, int[]>>();
-			for (int i = 0; i < 100; ++i)
+			for (int i = 0; i < 10; ++i)
 			{
 				for (int j = 0; j < 10; ++j)
 				{
-					for (int k = 0; k < 50; ++k)
+					for (int k = 0; k < 10; ++k)
 					{
-						train(0.02 + i * 0.02, 100 + j * 300, 0.1 + k * 0.2);
+						train(0.5, 6000, -5 + i, -5 + j, -5 + k);
 						test(_test_texts);
 
-						sw.WriteLine((0.01 + i * 0.01).ToString() + " " + (100 + j * 100).ToString() + " " + (0.1 + k * 0.2).ToString());
-						double sum = 0;
+						sw.WriteLine((-5 + i).ToString() + " " + (-5 + j).ToString() + " " + (-5 + k).ToString());
 
+						double recall_deviation = 0;
+						double precision_deviation = 0;
 						foreach (var theme in _themes)
 						{
-							sum += Math.Pow((double)theme.Value[2] / (theme.Value[1] + theme.Value[2]), 2);
-							sw.WriteLine(theme.Key.ToString() + " " + theme.Value[1].ToString() + " " + theme.Value[2].ToString());
+							double recall = get_recall(theme.Value[1], theme.Value[2]);
+							double precision = get_precision(theme.Value[1], theme.Value[3]);
+							recall_deviation += Math.Pow((1 - recall)*100, 2);
+							precision_deviation += Math.Pow((1 - precision) * 100, 2);
+							sw.WriteLine(theme.Key.ToString() + " " + recall.ToString() + " " + precision.ToString());
 						}
 
-						sw.WriteLine(Math.Sqrt(sum));
-						exps.Add(Tuple.Create(sum, new int[3] { i, j, k }));
+						sw.WriteLine(recall_deviation);
+						sw.WriteLine(precision_deviation);
+						exps.Add(Tuple.Create(recall_deviation, new int[3] { i, j, k }));
 						sw.WriteLine();
 
 						_themes = new SortedDictionary<string, List<int>>();
@@ -161,13 +168,24 @@ namespace Evgen
 			sw.Close();
 		}
 
-		void train(double max_add_multiplyer, int max_words, double power)
+		double get_recall(int true_count, int false_count)
+		{
+			return (double) true_count / (true_count + false_count + 1);
+		}
+
+		double get_precision(int true_count, int another_count)
+		{
+			return (double)true_count / (another_count + 1);
+		}
+
+		void train(double max_add_multiplyer, int max_words, double power_word_freq, double power_word_max_freq, double power_max_freq)
 		{
 			int i = 0;
 			foreach (var theme in _train_texts)
 			{
-				_themes.Add(theme.Key, new List<int>(3));
+				_themes.Add(theme.Key, new List<int>(4));
 				_themes[theme.Key].Add(i);
+				_themes[theme.Key].Add(0);
 				_themes[theme.Key].Add(0);
 				_themes[theme.Key].Add(0);
 				++i;
@@ -227,7 +245,11 @@ namespace Evgen
 				foreach (var theme_freq in _themes_freq)
 				{
 					theme_freq.Value.TryGetValue(word_freq.Item2, out val);
-					multiplyers[m] += Math.Pow(val / word_freq.Item1, power) * max_add_multiplyer;
+					
+					multiplyers[m] += Math.Pow(val, power_word_freq)* 
+						Math.Pow(word_freq.Item1, power_word_max_freq) *
+						Math.Pow(max_freq, power_max_freq) * max_add_multiplyer;
+
 					++m;
 				}
 				_words_operators.Add(word_freq.Item2, multiplyers);
@@ -292,7 +314,7 @@ namespace Evgen
 				words[i] = words[i].ToLower();
 				words[i] = lmtz.Lemmatize(words[i]);
 
-				if (!_stopwords.ContainsKey(words[i]) && words[i].Length > 2)
+				if (/*!_stopwords.ContainsKey(words[i]) &&*/ words[i].Length > 2)
 				{
 					story._words.Add(words[i]);
 
@@ -354,7 +376,9 @@ namespace Evgen
 				}
 			}
 
-			if (_themes[theme][0] == start.MaximumIndex())
+			int index = start.MaximumIndex();
+			_themes[_themes_names[index]][3] += 1;
+			if (_themes[theme][0] == index)
 			{
 				_themes[theme][1] += 1;
 			}
